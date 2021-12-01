@@ -1,0 +1,227 @@
+一 明确目标
+任何大型的市场中，品牌优势都是非常有价值的。而在网络市场中声誉和品牌尤其有价值，因为预期在网络市场中是非常关键的。很明显，拥有能控制Error的技术，会让客户体验更好，能让公司处于有利地位。
+
+我会通过网页最近出现Error的频率，Error的等级。根据公司现有的问题，结合模型流程把网站分为：
+    '111':'重要整治网页',
+    '101':'中度整治网页',
+    '011':'轻度整治网页',
+    '001':'微整治网页',
+    '110':'重要关注网页',
+    '100':'中度关注网页',
+    '010':'优秀网页',
+    '000':'超一流网页'
+
+接着观察数据，看看是否能提取到模型所需的目标数据。
+
+1）如果想获取某用户的最近一次Error时间间隔（R），可以通过该网站的【host】查找最新的一次【Error日期】，计算与当前时间的时间差。
+
+2）如果想获取某网站的Error频率（F），只需要查看该网站的【host】下，不重复的Error号数量。
+
+3）如果想获取某网站的Error等级（M），只需要将该网站的所有Error额进行加和。
+
+
+二 数据处理
+
+
+
+
+# 导入客户数据
+## 导入pandas库
+#import pandas as pd
+## 读取test.csv
+#test_csv = 
+## 查看test_csv
+#test_csv
+import warnings
+# 关闭警告显示
+warnings.filterwarnings('ignore')
+
+
+# 导入客户数据
+customer_info = pd.read('./mnt/log/example.com/access_20210719.csv.gz')
+# 查看数据的基本信息总结
+data.info()
+
+# 清洗【uri】列的缺失值
+data = data.dropna(subset=['uri'])
+# 查看清洗后的数据基本信息总结
+data.info()
+
+# 查找重复数据
+data[data.duplicated()]
+# 删除重复值
+data = data.drop_duplicates()
+# 查找清洗后的数据是否存在重复数据
+data[data.duplicated()]
+# 查看数据描述性统计的信息
+data.describe()
+# 筛选【level】列大于 0 的数据
+data = data[(data['level'] > 0)]
+# 查看数据描述性统计的信息
+data.describe()
+
+
+
+
+# 按【uid】和【host】分组后，获取【datetime】列的最大值和【level】列的总和
+grouped_data = data.groupby(['uid', 'host'], as_index=False).agg({'datetime': 'max', 'level': 'sum'})
+grouped_data.head(10)
+
+# 计算时间间隔（天数）
+today = '2021-11-24 00:00:00'
+pd.to_datetime(today) - pd.to_datetime(grouped_data['datetime'])
+
+# 计算时间间隔
+today = '2021-11-24 00:00:00'
+grouped_data['时间间隔'] = (pd.to_datetime(today) - pd.to_datetime(grouped_data['datetime'])).dt.days
+grouped_data
+
+
+# 按【host】分组后，获取【时间间隔】列的最小值、【uid】列的数量，以及【level】列的总和
+rfm_data = grouped_data.groupby('host', as_index=False).agg({'时间间隔': 'min', 'uid': 'count', 'level': 'sum'})
+
+
+
+# 修改列名为：host、时间间隔、uid和 sum of level
+rfm_data.columns = ['host', '时间间隔', 'uid', 'level']
+
+# 设置中文显示字体
+plt.rcParams['font.family'] = ['Source Han Sans CN']
+
+# 画 R 值（时间间隔）的折线图，便于后续对数据进行分组
+plt.figure(figsize=(10, 8))
+x = rfm_data['时间间隔'].sort_values()
+y = rfm_data.index
+plt.plot(x, y)
+rfm_data
+
+# 按【host】分组后，获取【时间间隔】列的最小值、【uid】列的数量，以及【level】列的总和
+rfm_data = grouped_data.groupby('用户 ID', as_index=False).agg({'时间间隔': 'min', '订单号': 'count', '总金额': 'sum'})
+
+# 修改列名为：host、时间间隔、Total Number of uid和level
+rfm_data.columns = ['host', '时间间隔', 'Total Number of uid', 'level']
+rfm_data
+
+# 设置中文显示字体
+plt.rcParams['font.family'] = ['Source Han Sans CN']
+
+# 画 R 值（时间间隔）的折线图，便于后续对数据进行分组
+plt.figure(figsize=(10, 8))
+x = rfm_data['时间间隔'].sort_values()
+y = rfm_data.index
+plt.plot(x, y)
+
+# 定义函数按照区间划分 R 值
+def caculate_r(s):
+    if s <= 100:
+        return 5
+    elif s <= 200:
+        return 4
+    elif s <= 300:
+        return 3
+    elif s <= 400:
+        return 2
+    else:
+        return 1
+
+# 对 R 值进行评分
+rfm_data['R评分'] = rfm_data['时间间隔'].agg(caculate_r)
+rfm_data
+
+# 画 F 值（Total Number of uid）的折线图，便于后续对数据进行分组
+plt.figure(figsize=(10, 8))
+x = rfm_data['Total Number of uid'].sort_values()
+y = rfm_data.index
+plt.plot(x, y)
+
+# 定义函数按照区间划分 F 值
+def caculate_f(s):
+    if s <= 5:
+        return 1
+    elif s <= 10:
+        return 2
+    elif s <= 15:
+        return 3
+    elif s <= 20:
+        return 4
+    else:
+        return 5
+
+# 对 F 值进行评分
+rfm_data['F评分'] = rfm_data['Total Number of uid'].agg(caculate_f)
+rfm_data
+
+# 画 M 值（level）的折线图，便于后续对数据进行分组
+plt.figure(figsize=(10, 8))
+x = rfm_data['level'].sort_values()
+y = rfm_data.index
+plt.plot(x, y)
+
+# 定义函数按照区间划分 M 值
+def caculate_m(s):
+    if s <= 2000:
+        return 1
+    elif s <= 4000:
+        return 2
+    elif s <= 6000:
+        return 3
+    elif s <= 8000:
+        return 4
+    else:
+        return 5
+
+# 对 M 值进行评分
+rfm_data['M评分'] = rfm_data['level'].agg(caculate_m)
+rfm_data
+
+# 计算 R评分、F评分、M评分的平均数
+r_avg = rfm_data['R评分'].mean()
+f_avg = rfm_data['F评分'].mean()
+m_avg = rfm_data['M评分'].mean()
+
+print('R评分的均值为：{}，F评分的均值为{}，M评分的均值为{}'.format(r_avg, f_avg, m_avg))
+
+# 查看 R 值的分数与阈值对比后得到的返回值
+rfm_data['R评分'] > r_avg
+
+num1 = bool(1) * 1
+num2 = bool(0) * 1
+print('num1 的值为{}，num2 的值为{}'.format(num1, num2))
+
+# 将R评分、F评分、M评分 的数据分别与对应的平均数做比较
+rfm_data['R评分'] = (rfm_data['R评分'] > r_avg) * 1
+rfm_data['F评分'] = (rfm_data['F评分'] > f_avg) * 1
+rfm_data['M评分'] = (rfm_data['M评分'] > m_avg) * 1
+rfm_data
+
+# 拼接R评分、F评分、M评分
+rfm_score = rfm_data['R评分'].astype(str) + rfm_data['F评分'].astype(str) + rfm_data['M评分'].astype(str)
+rfm_score
+
+# 定义字典标记 RFM 评分档对应的用户分类名称
+transform_label = {
+    '111':'重要整治网页',
+    '101':'中度整治网页',
+    '011':'轻度整治网页',
+    '001':'微整治网页',
+    '110':'重要关注网页',
+    '100':'中度关注网页',
+    '010':'优秀网页',
+    '000':'超一流网页'
+}
+
+总结：
+
+对于重要整治网页和中度整治网页，譬如页面错位，网站流程走不通，用户体验差等等；要加强网站维护，应该让算法和流程内容更简洁高效，让网站更易于管理。
+
+
+轻度整治网页，微整治网页和重要关注网页Error较多的情况，有机会是服务器容量没有跟上客户数量的增长。可以考虑服务器托管和服务器租用。服务器托管，可以节省高昂的专线和网络设备费用。 现在也有很多云服务器管理平台，使用免备案服务器，可以即时开通，弹性购买，不需要等待，让网站更稳定。
+
+因为，表示程序执行速度“时间”和表示内存使用量的“空间”总是对立。执行速度越快，程序会占用越多内存空间。而占用内存越少，程序执行速度就会越慢。基于这个原因，占用内存空间最小的算法或数据结构并不能称为”最优“。所以，算法的空间和时间的平衡，要对客户增长有大概的预测，留有冗余的空间和时间。
+
+
+具体情况还需要对网站进行深入分析。
+
+
+
+
